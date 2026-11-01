@@ -2,9 +2,11 @@
 
 import Link from 'next/link';
 import { createContext, useActionState, useContext, useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, ArrowRight, ShieldCheck, X, Plus, Minus, Copy, Check, ShoppingBag, Menu, ChevronDown, Trash2 } from 'lucide-react';
-import { unlockPromo, type PromoState } from './actions';
+import { ArrowUpRight, ArrowRight, X, Plus, Minus, Check, ShoppingBag, Menu, ChevronDown, Trash2 } from 'lucide-react';
+import { unlockPromo, validateDiscountCode, type PromoState } from './actions';
 import { premiumProduct } from './product';
+import { PROMOTION } from './lib/promotion';
+import PromoDialog from './promo-dialog';
 import { findProduct, formatMoney, premiumSlug } from './catalog';
 
 type CartLine = { slug: string; quantity: number };
@@ -24,7 +26,6 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
   const [savedCode, setSavedCode] = useState('');
   const [coupon, setCoupon] = useState('');
   const [discount, setDiscount] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [cartMessage, setCartMessage] = useState('');
   const [completed, setCompleted] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -39,9 +40,11 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
     try {
       const data = JSON.parse(sessionStorage.getItem('wayu-demo-store') || '{}');
       if (Array.isArray(data.items)) setItems(data.items.filter((item: CartLine) => findProduct(item.slug) && Number.isInteger(item.quantity) && item.quantity > 0 && item.quantity <= 99));
-      if (data.code === 'WAYUPERU10') { setSavedCode(data.code); setDiscount(Boolean(data.discount)); }
+      if (typeof data.code === 'string' && PROMOTION.codePattern.test(data.code)) {
+        void validateDiscountCode(data.code).then(result=>{if(result.valid){setSavedCode(data.code);setDiscount(Boolean(data.discount));}});
+      }
     } catch { /* The promotion also works when browser storage is unavailable. */ }
-    promo.current?.showModal();
+    if (window.location.pathname !== '/privacidad') promo.current?.showModal();
     setLoaded(true);
   }, []);
   useEffect(() => {
@@ -82,7 +85,7 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
 
     {children}
         <footer><div className="footer-top"><Link href="/" className="brand"><img src="/images/logo.png" alt="WAYU" width="600" height="200"/></Link><p>El fuego nos une.<br/>Los buenos momentos se quedan.</p><Link href="/colecciones">Explorar productos <ArrowUpRight size={17}/></Link></div><div className="footer-bottom"><span>© {new Date().getFullYear()} · WAYU — PROPUESTA ACADÉMICA</span><span>Imágenes: wayu.com.pe · Promoción ficticia · Sin afiliación comercial</span><span>HECHO CON ORGULLO EN PERÚ <span className="peru-flag">▌▌</span></span></div></footer>
-        <dialog className="promo-dialog" ref={promo} onClick={closeOutside} aria-labelledby="promo-title"><div className="promo-layout"><button className="close" aria-label="Cerrar promoción" onClick={()=>promo.current?.close()}><X size={21}/></button><div className="flyer"><img src="/images/modal.png" alt="Por estas Fiestas obtén 10% Dsct. Descubre el nuevo Set Parrillero PRM Wayu" width="1300" height="1800"/></div><div className="promo-form">{promoCode ? <div className="success"><span className="success-icon"><Check size={27}/></span><div className="eyebrow red">QUE EMPIECE LA CELEBRACIÓN</div><h2 id="promo-title">El próximo asado<br/>va por tu cuenta.</h2><p>Tu 10% de descuento para el set de tabla, cuchillo y tenedor PRM está listo. Copia el código y aplícalo en tu bolsa.</p><div className="coupon"><strong>{promoCode}</strong><button aria-label="Copiar código promocional" onClick={async()=>{try{await navigator.clipboard.writeText(promoCode!);setCopied(true);}catch{setCopied(false);}}}>{copied?<Check size={19}/>:<Copy size={19}/>}</button></div><span role="status" className="copy-status">{copied?'¡Código copiado!':'Tu código exclusivo de Fiestas Patrias'}</span><Link className="button dark" href={`/productos/${premiumSlug}`} onClick={()=>promo.current?.close()}>Descubrir mi set premium <ArrowRight size={17}/></Link><small>Promoción académica. Solo para la compra simulada en esta web.</small></div> : <><div className="eyebrow red">CELEBRA LO NUESTRO</div><h2 id="promo-title">Lo nuestro<br/>merece un <em>gran asado.</em></h2><p>Déjanos tus datos y desbloquea un <strong>10% OFF</strong> en el Set Premium Wayu de tabla, cuchillo y tenedor.</p><form action={action}><label htmlFor="full-name">Nombre completo<input id="full-name" name="name" placeholder="Tu nombre y apellido" autoComplete="name" minLength={5} maxLength={100} required/></label><label htmlFor="phone">Celular<div className="phone-input"><span>PE +51</span><input id="phone" name="phone" type="tel" inputMode="tel" placeholder="987 654 321" autoComplete="tel-national" maxLength={18} required/></div></label><label htmlFor="email">Correo electrónico<input id="email" name="email" type="email" placeholder="hola@tucorreo.com" autoComplete="email" maxLength={254} required/></label><label className="consent"><input type="checkbox" name="consent" required/><span>Acepto las condiciones de esta promoción académica. Mis datos se validan y no se almacenan.</span></label>{state.error&&<p className="form-error" role="alert">{state.error}</p>}<button className="button dark" disabled={pending} type="submit">{pending?'Preparando tu código…':'Quiero mi 10% OFF'}<ArrowRight size={18}/></button></form><span className="promo-footnote"><ShieldCheck size={13}/> Demo académica · Código sin validez en la tienda oficial</span></>}</div></div></dialog>
+    <PromoDialog dialogRef={promo} state={state} action={action} pending={pending} code={promoCode}/>
     <dialog className="cart-dialog" ref={cart} onClick={closeOutside} aria-labelledby="cart-title">
       <div className="cart-content">
         <div className="cart-heading"><h2 id="cart-title">Tu bolsa <span>({itemCount})</span></h2><button aria-label="Cerrar bolsa" onClick={()=>cart.current?.close()}><X/></button></div>
@@ -91,7 +94,7 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
             const product = findProduct(item.slug)!;
             return <div className="cart-item" key={item.slug}><Link href={`/productos/${item.slug}`} onClick={()=>cart.current?.close()}><img src={product.images[0].src} alt={product.images[0].alt}/></Link><div className="cart-item-info"><Link href={`/productos/${item.slug}`} onClick={()=>cart.current?.close()}><h3>{product.name}</h3></Link><p>{formatMoney(product.priceInCents)}</p>{item.slug === premiumSlug && <small>Elegible para el cupón de Fiestas Patrias</small>}<div className="cart-item-controls"><div className="quantity"><button aria-label={`Quitar una unidad de ${product.name}`} onClick={()=>changeQuantity(item.slug,-1)}><Minus size={14}/></button><span>{item.quantity}</span><button aria-label={`Añadir una unidad de ${product.name}`} onClick={()=>changeQuantity(item.slug,1)} disabled={item.quantity>=99}><Plus size={14}/></button></div><button className="remove-item" aria-label={`Eliminar ${product.name}`} onClick={()=>{setItems(previous=>previous.filter(line=>line.slug!==item.slug));setCartMessage('');}}><Trash2 size={15}/></button></div></div><span className="cart-line-total">{formatMoney(item.quantity*product.priceInCents)}</span></div>;
           })}
-          <form className="coupon-form" onSubmit={event=>{event.preventDefault();if(promoCode && coupon.trim().toUpperCase()===promoCode){if(!eligibleSubtotal){setCartMessage('Agrega el set de tabla, cuchillo y tenedor PRM para usar este código.');return;}setDiscount(true);setCartMessage('¡10% de descuento aplicado al set PRM!');}else{setDiscount(false);setCartMessage('Código no válido. Desbloquéalo en la promoción.');}}}><label htmlFor="coupon">¿Tienes un código promocional?</label><div><input id="coupon" value={coupon} onChange={event=>setCoupon(event.target.value)} placeholder="Ingresa tu código" required/><button type="submit">Aplicar</button></div></form>
+          <form className="coupon-form" onSubmit={async event=>{event.preventDefault();if(!eligibleSubtotal){setCartMessage('Agrega el set de tabla, cuchillo y tenedor PRM para usar este código.');return;}setCartMessage('Verificando tu código…');setDiscount(false);const result=await validateDiscountCode(coupon);if(result.valid){setSavedCode(coupon.trim().toUpperCase());setDiscount(true);setCartMessage('¡10% de descuento aplicado al set PRM!');}else{setCartMessage(result.error || 'No pudimos verificar el código.');}}}><label htmlFor="coupon">¿Tienes un código promocional?</label><div><input id="coupon" value={coupon} onChange={event=>setCoupon(event.target.value)} placeholder="Ingresa tu código" required/><button type="submit">Aplicar</button></div></form>
           <p className="cart-message" role="status">{cartMessage}</p>
           {!promoCode && <button className="cart-get-promo" onClick={()=>{cart.current?.close();openPromo();}}>Conseguir mi código de Fiestas Patrias <ArrowRight size={14}/></button>}
           <div className="totals"><p>Subtotal <span>{formatMoney(subtotal)}</span></p>{savings>0&&<p className="discount">Descuento 10% · Set PRM <span>− {formatMoney(savings)}</span></p>}<p>Envío <span>No aplica en esta demo</span></p><p className="total">Total <span>{formatMoney(subtotal-savings)}</span></p></div>
@@ -101,4 +104,3 @@ export default function StoreShell({ children }: { children: React.ReactNode }) 
     </dialog>
   </StoreContext.Provider>;
 }
-

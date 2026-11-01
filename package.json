@@ -2,7 +2,28 @@
   "name": "wayu-fiestas-patrias",
   "version": "1.0.0",
   "private": true,
-  "scripts": { "dev": "next dev --hostname 127.0.0.1", "build": "next build", "start": "next start --hostname 127.0.0.1", "typecheck": "tsc --noEmit" },
-  "dependencies": { "next": "16.4.3", "react": "19.3.1", "react-dom": "19.3.1", "lucide-react": "^0.468.0" },
-  "devDependencies": { "typescript": "^5.9.3", "@types/node": "^24.0.0", "@types/react": "^19.0.0", "@types/react-dom": "^19.0.0" }
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "check:registration": "node scripts/check-registration.mjs"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "next": "16.4.3",
+    "nodemailer": "^10.3.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/nodemailer": "^8.0.2",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  }
 }
